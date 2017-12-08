@@ -1,0 +1,13 @@
+Exch,               object,
+Ccy,                object,
+PosSOD,             float,          0.0
+PosITD,             float,          0.0
+PosITDAvail,        float,          0.0
+PosTrgt,            float,          0.0
+PosFinal,           float,          0.0
+IsRestricted,       int,            0
+RestrType,          object,
+Alpha,              float,          NaN
+Bid,                float,          NaN
+Mid,                float,          NaN
+Ask,                float,          NaN

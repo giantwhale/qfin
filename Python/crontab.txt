@@ -1,0 +1,2 @@
+# m  h  dom mon dow   command
+*/5  *  *   *   *     /home/ubuntu/apps/bin/python /home/ubuntu/qfin/python/examples/gdax/prod_start_gdax_data_server.py --mode prod

@@ -1,0 +1,11 @@
+OrderId,        object,
+TradeDate,      datetime64[ns],
+BaseCcy,        object,
+QuoteCcy,       object,
+Side,           object,
+Price,          float,              NaN
+Quantity,       float,              0.0
+Status,         object,
+Type,           object,
+SubTime,        datetime64[ns],
+Filled,         bool,               false

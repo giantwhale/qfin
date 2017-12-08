@@ -1,0 +1,162 @@
+# Branch account
+
+import logging
+
+from collections import OrderedDict, deque
+from datetime import datetime, timedelta
+utcnow = datetime.utcnow 
+import numpy as np
+from numpy import nan as np_nan
+import pandas as pd
+from pandas import DataFrame, Series, concat
+
+from .exchanges import Exchange  #@ToDo: change to BaseExchange?
+from .universe import Universe
+from .fileutils import save_signal
+from qfin.utils import data_parser
+from os.path import join as path_join
+
+logger = logging.getLogger(__file__)
+WARN   = logger.warn
+temp_path = 'CryptoCrncy/templates'
+
+class Account(object):
+
+    def __init__(self, snap, exch_usd):
+        """Do not call constructor directly, use the classmethod build instead"""
+        # A DataFrame keyed by (SnapTime, Exch, BaseCcy)
+        self._snap      = snap
+        self._snap_hist = deque(maxlen=100)
+
+        self._exch_usd      = exch_usd
+        self._exch_usd_hist = deque(maxlen=100)
+
+    @property
+    def snap(self):
+        return self._snap.copy()
+
+    @property
+    def exch_ccy_keys(self):
+        return self._snap[['Exch', 'Ccy']].copy()
+
+    def get_exch_mv(self, name):
+        if name not in self._exch_usd:
+            raise KeyError("Exchange [%s] is not registered with account" % name)
+        snap = self._snap[self._snap['Exch'] == name]
+        return snap['PosITD'].dot(snap['Mid'])
+
+    def set_column(self, name, value, dtype=None, ignore_keys=True):
+        if not ignore_keys:
+            # should we always assume values are in proper order?
+            raise NotImplementedError("")
+        self._snap[name] = np.array(value, dtype=dtype)
+
+    # setters for key data columns
+    def set_curr_position(self, v, ignore_keys=True):
+        if not ignore_keys:
+            raise NotImplementedError("")
+        else:
+            self._snap['PosITDAvail'] = np.array(v)
+
+    def set_total_position(self, v, ignore_keys=True):
+        if not ignore_keys:
+            raise NotImplementedError("")
+        else:
+            self._snap['PosITD'] = np.array(v)
+
+    def set_exch_usd(self, name, v):
+        if name not in self._exch_usd:
+            raise KeyError("Exchange [%s] is not registered with account" % name)
+        self._exch_usd[name] = float(v)
+
+    def set_best_bid_ask(self, bids, asks, ignore_keys=True):
+        if not ignore_keys:
+            raise NotImplementedError("")
+        else:
+            self._snap['Bid'] = np.array(bids, dtype='float')
+            self._snap['Ask'] = np.array(asks, dtype='float')
+            self._snap['Mid'] = (self._snap['Bid'] + self._snap['Ask']) / 2.0
+
+    def set_alpha(self, x):
+        self._snap['Alpha'] = np.float_(x)
+
+    def set_snap_time(self, dt):
+        assert isinstance(dt, datetime)
+        self._snap['SnapTime'] = dt
+
+    # Other functions 
+    def consolidate(self, order_book):
+        # @ToDo: We need to calculate the current position
+        # Let's skip this for now, as it is not required by trading
+        return self
+
+    def calc_trades(self, hor):
+        # @FixMe: should I calculate trade here? 
+        # We should create a new optimization procedure. 
+        WARN("calc_trades: Not Implented Yet")
+        trades = None
+        return trades 
+
+    @property
+    def univ(self):
+        return DataFrame({
+                'Exch': self._snap['Exch'].values,
+                'Ccy' : self._snap['Ccy' ].values,
+            }, columns=['Exch', 'Ccy'])
+
+    @classmethod
+    def build(cls, asof, univ, init_account=None):
+        # When init_account is given, the new universe must be the union of the current
+        # universe and the init_account universe
+        assert isinstance(univ, Universe), 'expecting Universe, got %s' % type(univ)
+        prev_date = asof - timedelta(days=1)
+
+        if init_account is not None:
+            raise NotImplementedError('init_account')
+
+        # Load account from template
+        snap = data_parser.parse_data_from(path_join(temp_path, 'account_temp.csv'), univ.size)
+        snap[univ.data.columns] = univ.data.copy()
+        snap['SnapTime'] = np_nan
+
+        # Load Prev EOD position
+        sod_pos = cls.load_pos_eod(prev_date)
+        sod_pos = snap[['Exch', 'Ccy']].merge(sod_pos, how='left', on=['Exch', 'Ccy'])
+        sod_pos = sod_pos['PosITDAvail'].fillna(0.0).values
+        
+        snap['PosSOD'      ] = sod_pos
+        snap['PosITDAvail' ] = sod_pos
+        snap['IsRestricted'] = np.int_(snap['Ccy'].values == 'USD')  # Hard code for now
+
+        exch_usd = {name: 0.0 for name in univ.exch_names}
+
+        return cls(snap, exch_usd)
+
+    @classmethod
+    def load_pos_eod(cls, asof):
+        WARN("*** Account.load_pos_eod Not Implemented Yet")
+        # @FixMe, we should also load USD Position
+        # For production this is not relevant, since we only use 
+        # data from exchange
+        return DataFrame(columns=['Exch', 'Ccy', 'PosITDAvail'])
+
+    def save_curr_snap(self, ymd_hms):
+        save_signal(self._snap, ymd_hms, 'account_hist', 'account')
+
+    def to_next_snap(self):
+        self._snap_hist.append(self._snap.copy())
+        self._snap['Alpha'   ] = np_nan
+        self._snap['SnapTime'] = np_nan
+        return self
+
+    def __str__(self):
+        lines = ['Accounts:\n  | USD Positions:']
+        for name, pos in self._exch_usd.items():
+            lines.append('  |  | {:s}:\t{:.4f}'.format(name, pos))
+        lines.append('  | Ccy Positions:')
+        lines.extend(['  |  | ' + x for x in str(self._snap).split('\n')])
+        return '\n'.join(lines)
+
+    def __repr__(self):
+        return self.__str__()
+
