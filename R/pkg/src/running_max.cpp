@@ -93,7 +93,7 @@ NumericVector running_min(NumericVector x, int w, size_t min_size=1) {
         }
 
         if (!NumericVector::is_na(v)) {
-            q.push_back(make_pair<double, int>(v, i));
+            q.push_back(make_pair(v, i));
         }
 
         //Head value is minimum in the current window
